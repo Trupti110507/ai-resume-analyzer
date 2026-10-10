@@ -224,7 +224,7 @@ def show_analysis_page(user):
         heading = analysis["title"] or "Job description"
 
         if len(results) == 1:
-            st.header("Resume analysis report")
+            st.header("Analysis result")
             st.caption(f"{heading} | Resume: {results[0]['file_name']}")
             show_report(results[0], total)
         else:
@@ -250,7 +250,7 @@ def show_analysis_page(user):
 # ----------------------------------------------------------------- page
 
 prepare_database()
-st.title("AI Resume Analyzer")
+st.title("Resume Analysis Report")
 
 user = current_user()
 if user is None:
