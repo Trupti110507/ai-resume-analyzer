@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+resume_analyzer.db
+secret_key.txt
+.venv/
