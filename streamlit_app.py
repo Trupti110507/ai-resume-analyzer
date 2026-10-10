@@ -31,6 +31,10 @@ SAMPLE_RESUMES = ["resume_1_strong_match.pdf", "sample_resume.pdf", "resume_2_pa
 
 st.set_page_config(page_title="AI Resume Analyzer", page_icon="📄", layout="centered")
 
+# Hide Streamlit's grey hints inside input boxes ("Press Enter to submit form").
+# Pressing Enter still works.
+st.markdown('<style>[data-testid="InputInstructions"] { display: none !important; }</style>', unsafe_allow_html=True)
+
 
 def read_sample(name, mode="rb"):
     with open(os.path.join(SAMPLES, name), mode) as f:
