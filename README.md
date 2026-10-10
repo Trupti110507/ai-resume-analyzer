@@ -26,8 +26,13 @@ Manual way, in a Command Prompt opened in this folder:
 
 `streamlit_app.py` is a second front end for publishing the project online with
 Streamlit Community Cloud. It uses the same analysis modules as the Flask application.
-It has no login and no database: resumes are analyzed in memory and nothing is saved,
-which is the safe choice for a public website.
+A user must register and log in with an email and password before the analyzer opens.
+Only a hash of the password is stored, and every user sees only their own reports
+("History" in the menu on the left).
+
+Note: Streamlit Community Cloud does not keep files permanently. When the app restarts
+(after an update, or after it has been asleep), the database is empty again and users
+must register again.
 
 Run it on your own computer:
 
@@ -68,10 +73,10 @@ The score shows skill overlap only. It is not a prediction of selection.
 | `matching.py` | Matching, Score Calculation | Compares skills and calculates the score |
 | `suggestions.py` | Suggestion | Writes the suggestions |
 | `database.py` | Database | SQLite tables: user, resume, job_description, analysis_result, skill |
-| `streamlit_app.py` | Report (online version) | The same analysis as a Streamlit page, without login or database |
+| `streamlit_app.py` | Report (online version) | The same analysis as a Streamlit page, with register, login and history |
 | `templates/` | Input and output screens | HTML pages |
 | `static/` | | CSS styles and JavaScript |
-| `tests/` | Testing | 37 automatic tests |
+| `tests/` | Testing | 42 automatic tests |
 | `samples/` | | Four sample resumes (expected scores 100%, 62.5%, 25%, 0%) and a sample job description |
 | `screenshots/` | | Screenshots of every screen, for the report |
 
