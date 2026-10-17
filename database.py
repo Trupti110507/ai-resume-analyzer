@@ -6,6 +6,7 @@ in an SQLite database file (resume_analyzer.db). SQLite is part of Python, so
 no separate database server has to be installed.
 """
 
+import json
 import os
 import sqlite3
 from datetime import datetime
@@ -49,6 +50,17 @@ CREATE TABLE IF NOT EXISTS analysis_result (
     matched_skills  TEXT,
     missing_skills  TEXT,
     suggestions     TEXT,
+    analyzed_at     DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS interview_result (
+    interview_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES user (user_id) ON DELETE CASCADE,
+    question        VARCHAR(255),
+    transcript      TEXT,
+    duration        DECIMAL(6,1),
+    overall_score   DECIMAL(5,2) NOT NULL CHECK (overall_score BETWEEN 0 AND 100),
+    details         TEXT NOT NULL,
     analyzed_at     DATETIME NOT NULL
 );
 
@@ -182,3 +194,30 @@ def delete_result(result_id, user_id):
             "DELETE FROM resume WHERE resume_id = ? AND NOT EXISTS (SELECT 1 FROM analysis_result WHERE resume_id = ?)",
             (row["resume_id"], row["resume_id"]))
         return True
+
+
+# ------------------------------------------------------ voice interviews
+
+def save_interview(user_id, question, result):
+    """Save the analysis of one spoken interview answer. Returns its id."""
+    with connect() as db:
+        cursor = db.execute(
+            """INSERT INTO interview_result
+               (user_id, question, transcript, duration, overall_score, details, analyzed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, question, result["transcript"], round(result["duration"], 1), result["overall"],
+             json.dumps(result), now()))
+        return cursor.lastrowid
+
+
+def list_interviews(user_id):
+    """All voice interview results of this user, newest first, with the details unpacked."""
+    with connect() as db:
+        rows = db.execute("SELECT * FROM interview_result WHERE user_id = ? ORDER BY interview_id DESC", (user_id,)).fetchall()
+    return [dict(row, details=json.loads(row["details"])) for row in rows]
+
+
+def delete_interview(interview_id, user_id):
+    with connect() as db:
+        return db.execute("DELETE FROM interview_result WHERE interview_id = ? AND user_id = ?",
+                          (interview_id, user_id)).rowcount > 0

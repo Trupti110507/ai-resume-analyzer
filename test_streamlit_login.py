@@ -93,7 +93,7 @@ class StreamlitLoginTests(unittest.TestCase):
         app = self.register(self.open_app(), "Ravi", "ravi@example.com", "anotherpass1")
         app.sidebar.radio[0].set_value("History")
         app = app.run()
-        self.assertIn("no saved reports", texts(app))
+        self.assertIn("no saved resume reports", texts(app))
 
 
 if __name__ == "__main__":

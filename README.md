@@ -52,6 +52,22 @@ with GitHub, choose "Create app", select the repository, and set the main file t
    highest score to the lowest, and can open each resume's own report from there.
    "History" lists your earlier reports.
 
+## Voice interview (online version)
+
+Open "Voice interview" in the menu, pick a question, click the microphone, answer, and
+click it again to stop. "Analyze my answer" then reports, each out of 100:
+
+- Pronunciation clarity: how confidently each word was recognized by the speech model
+- Fluency: filler words (um, uh, like, you know), repeated words and long pauses
+- Pace: words per minute (comfortable range 120 to 160)
+- Tone and pitch: how much the voice rises and falls (a flat voice sounds monotone) and steady volume
+- English usage: vocabulary variety, sentence length and common grammar slips
+
+Speech is turned into text by faster-whisper, a free speech-to-text model that runs on the
+server (about 150 MB, downloaded automatically the first time). Pitch and loudness are measured
+directly from the sound with NumPy. The scores are practice estimates, not a certified test.
+Results are saved in the `interview_result` table and listed under "History".
+
 ## How the score is calculated
 
     match score = (required skills found in the resume / total required skills) x 100
@@ -73,10 +89,11 @@ The score shows skill overlap only. It is not a prediction of selection.
 | `matching.py` | Matching, Score Calculation | Compares skills and calculates the score |
 | `suggestions.py` | Suggestion | Writes the suggestions |
 | `database.py` | Database | SQLite tables: user, resume, job_description, analysis_result, skill |
+| `speech_analysis.py` | Voice Interview Analysis | Speech to text, pitch, loudness, pace, fillers, pronunciation and English scores |
 | `streamlit_app.py` | Report (online version) | The same analysis as a Streamlit page, with register, login and history |
 | `templates/` | Input and output screens | HTML pages |
 | `static/` | | CSS styles and JavaScript |
-| `tests/` | Testing | 42 automatic tests |
+| `tests/` | Testing | 54 automatic tests |
 | `samples/` | | Four sample resumes (expected scores 100%, 62.5%, 25%, 0%) and a sample job description |
 | `screenshots/` | | Screenshots of every screen, for the report |
 
@@ -86,6 +103,7 @@ The score shows skill overlap only. It is not a prediction of selection.
 - `resume` (resume_id, user_id, file_name, file_type, upload_date, extracted_text)
 - `job_description` (jd_id, user_id, title, description, required_skills, created_at)
 - `analysis_result` (result_id, resume_id, jd_id, match_score, matched_skills, missing_skills, suggestions, analyzed_at)
+- `interview_result` (interview_id, user_id, question, transcript, duration, overall_score, details, analyzed_at)
 - `skill` (skill_id, skill_name, category)
 
 The database is the file `resume_analyzer.db`, created automatically on the first run.

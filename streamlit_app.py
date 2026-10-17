@@ -4,6 +4,9 @@ AI Resume Analyzer - Streamlit version (for publishing online).
 Uses the same modules as the Flask application (app.py): text extraction,
 preprocessing, skill identification, matching, suggestions and the database.
 
+The "Voice interview" page records a spoken interview answer from the microphone
+and reports pronunciation, fluency, pace, tone and pitch, and English usage.
+
 A user must register and log in with an email and password before using the
 analyzer. Only a hash of the password is stored. Every user sees only their
 own reports.
@@ -18,6 +21,7 @@ import streamlit as st
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import database
+import speech_analysis
 from matching import calculate_score, match_skills
 from preprocessing import top_keywords
 from skill_identification import find_skills, skill_words
@@ -29,7 +33,7 @@ MAX_JOB_DESCRIPTION_LENGTH = 20000
 SAMPLES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "samples")
 SAMPLE_RESUMES = ["resume_1_strong_match.pdf", "sample_resume.pdf", "resume_2_partial_match.pdf", "resume_3_weak_match.pdf"]
 
-st.set_page_config(page_title="AI Resume Analyzer", page_icon="📄", layout="centered")
+st.set_page_config(page_title="Resume Analysis Report", page_icon="📄", layout="centered")
 
 # Hide Streamlit's grey hints inside input boxes ("Press Enter to submit form").
 # Pressing Enter still works.
@@ -145,9 +149,20 @@ def show_login_page():
 
 def show_history_page(user):
     st.header("History")
+    interviews = database.list_interviews(user["user_id"])
+    if interviews:
+        st.subheader("Voice interviews")
+        for row in interviews:
+            with st.expander(f"{row['analyzed_at'][:16]} | {row['question']}: {row['overall_score']:g} / 100"):
+                show_interview_report(row["details"])
+                if st.button("Delete this interview", key=f"delete_interview_{row['interview_id']}"):
+                    database.delete_interview(row["interview_id"], user["user_id"])
+                    st.session_state.pop("interview", None)
+                    st.rerun()
+        st.subheader("Resume reports")
     rows = database.list_results(user["user_id"])
     if not rows:
-        st.write("You have no saved reports yet. Open \"New analysis\" to create one.")
+        st.write("You have no saved resume reports yet. Open \"New analysis\" to create one.")
         return
     st.write(f"{len(rows)} saved reports, newest first.")
     for row in rows:
@@ -247,6 +262,96 @@ def show_analysis_page(user):
 
 
 
+# ------------------------------------------------------- voice interview
+
+@st.cache_resource(show_spinner="Loading the speech model (first time only, about a minute)...")
+def speech_model():
+    return speech_analysis.load_model()
+
+
+def show_interview_report(r):
+    """Voice Interview Report: overall score, the five part scores, the details and suggestions."""
+    st.metric("Speaking score", f"{r['overall']:g} / 100  ({r['band']})")
+    st.progress(min(int(round(r["overall"])), 100))
+    for name, value in r["scores"].items():
+        left, right = st.columns([2, 3])
+        left.write(f"**{name}**: {value:g} ({speech_analysis.band(value)})")
+        right.progress(min(int(round(value)), 100))
+
+    st.markdown("**What was measured**")
+    fillers = ", ".join(f"{k} ({v})" for k, v in sorted(r["fillers"].items(), key=lambda x: -x[1])) or "none"
+    pitch = (f"{r['median_pitch']:.0f} Hz on average, moving across {r['pitch_range']:.1f} semitones"
+             if r["median_pitch"] else "not enough voiced sound to measure")
+    st.markdown("\n".join([
+        f"- Length: {r['duration']:.0f} seconds, {r['word_count']} words",
+        f"- Pace: {r['wpm']:.0f} words per minute (comfortable range 120 to 160)",
+        f"- Pauses: {r['pauses']} short, {r['long_pauses']} long (2 seconds or more)",
+        f"- Filler words: {fillers}; words repeated back to back: {r['repeats']}",
+        f"- Pitch: {pitch}",
+        f"- Volume: {r['average_db']:.0f} dB on average, steadiness spread {r['loudness_spread']:.1f} dB",
+        f"- Vocabulary variety: {r['variety'] * 100:.0f}% different words; average sentence {r['sentence_length']:.0f} words",
+        f"- Words that were hard to recognize: {', '.join(r['unclear_words']) or 'none'}",
+        f"- Skills you mentioned: {', '.join(r['skills']) or 'none from the skill list'}",
+    ]))
+    st.markdown("**Suggestions for improvement**")
+    st.markdown("\n".join(f"{n}. {t}" for n, t in enumerate(r["suggestions"], start=1)))
+    with st.expander("What you said (transcript)"):
+        st.write(r["transcript"] or "No words were recognized.")
+
+
+def show_interview_page(user):
+    st.header("Voice interview")
+    st.write("Pick a question, switch on the microphone and answer as you would in an interview. "
+             "The AI listens to your answer and reports your pronunciation, fluency, pace, tone and pitch, "
+             "and English usage, with suggestions.")
+    question = st.selectbox("Interview question", speech_analysis.INTERVIEW_QUESTIONS + ["My own question"])
+    if question == "My own question":
+        question = st.text_input("Type the question", max_chars=200).strip() or "Free answer"
+    st.info(f"**{question}**  \nSpeak for 30 seconds to 3 minutes. Use a quiet room and keep the microphone close.")
+
+    recording = st.audio_input("Click the microphone to start, and click it again to stop", key="interview_audio")
+    with st.expander("Or upload a recording instead (WAV, MP3, M4A)"):
+        uploaded = st.file_uploader("Recording", type=["wav", "mp3", "m4a", "ogg", "webm"], key="interview_file")
+    audio_file = recording or uploaded
+
+    if st.button("Analyze my answer", type="primary"):
+        if audio_file is None:
+            st.error("Please record your answer first (click the microphone, speak, then click it again).")
+        elif audio_file.size > 25 * 1024 * 1024:
+            st.error("The recording is too large. Please keep it under 3 minutes.")
+        else:
+            try:
+                audio = speech_analysis.load_audio(audio_file.getvalue())
+            except Exception:
+                audio = None
+                st.error("This recording could not be read. Please record again.")
+            if audio is not None:
+                seconds = len(audio) / speech_analysis.SAMPLE_RATE
+                if seconds < speech_analysis.MIN_SECONDS:
+                    st.error(f"The answer is too short. Please speak for at least {speech_analysis.MIN_SECONDS} seconds (30 seconds or more gives a better result).")
+                elif seconds > speech_analysis.MAX_SECONDS + 5:
+                    st.error("The answer is longer than 3 minutes. Please record a shorter answer.")
+                else:
+                    model = speech_model()
+                    with st.spinner("Listening to your answer and analyzing it..."):
+                        words = speech_analysis.transcribe(audio, model)
+                    if not words:
+                        st.error("No speech was recognized. Check that the microphone is working and speak clearly.")
+                    else:
+                        spoken_skills = find_skills(" ".join(w["word"] for w in words))
+                        result = speech_analysis.analyze_speech(audio, words, spoken_skills)
+                        database.save_interview(user["user_id"], question, result)
+                        st.session_state["interview"] = {"question": question, "result": result}
+
+    saved = st.session_state.get("interview")
+    if saved:
+        st.divider()
+        st.subheader("Voice interview report")
+        st.caption(f"Question: {saved['question']}")
+        show_interview_report(saved["result"])
+        st.info("These scores are automatic estimates for practice. They are not a certified English test.")
+
+
 # ----------------------------------------------------------------- page
 
 prepare_database()
@@ -260,14 +365,16 @@ else:
     with st.sidebar:
         st.write(f"Logged in as **{user['name']}**")
         st.caption(user["email"])
-        page = st.radio("Menu", ["New analysis", "History"])
+        page = st.radio("Menu", ["New analysis", "Voice interview", "History"])
         if st.button("Log out"):
             st.session_state.clear()
             st.rerun()
     if page == "History":
         show_history_page(user)
+    elif page == "Voice interview":
+        show_interview_page(user)
     else:
         show_analysis_page(user)
 
 st.divider()
-st.caption("AI Resume Analyzer, a mini-project for S.Y. B.Sc. Computer Science. The score is an indication, not a prediction of selection.")
+st.caption("Resume Analysis Report, a mini-project for S.Y. B.Sc. Computer Science. The score is an indication, not a prediction of selection.")
