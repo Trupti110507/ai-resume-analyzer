@@ -1,0 +1,21 @@
+# Look of the Streamlit app: calm "hiring room" colours and fonts.
+[theme]
+base = "light"
+primaryColor = "#0F6B66"
+backgroundColor = "#F5F7F9"
+secondaryBackgroundColor = "#E8EEF1"
+textColor = "#172338"
+linkColor = "#0F6B66"
+borderColor = "#D3DCE3"
+showWidgetBorder = true
+baseRadius = "medium"
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+headingFont = "Source Serif 4:https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600&display=swap"
+
+[theme.sidebar]
+backgroundColor = "#172338"
+secondaryBackgroundColor = "#22324D"
+textColor = "#E6ECF2"
+primaryColor = "#5CC2B9"
+borderColor = "#2C3E5C"
+linkColor = "#9ADBD4"
