@@ -52,6 +52,59 @@ with GitHub, choose "Create app", select the repository, and set the main file t
    highest score to the lowest, and can open each resume's own report from there.
    "History" lists your earlier reports.
 
+## AI interview (online version)
+
+Open "AI interview" in the menu, type the job title you are preparing for (any role), and
+optionally paste the job description and add your resume. Choose your experience level, the
+interview type (mixed, HR or technical) and the number of questions. Then click "Join interview"
+in the interview room. With a job description, Emma asks about the job's duties and required
+skills, connects them to your resume, and checks required skills your resume does not show.
+"Fill in the sample job and resume" loads the sample files for a quick demo.
+
+- Emma, the AI interviewer, asks each question out loud in a US English voice (the browser's
+  built-in voice: "Google US English" in Chrome, a Microsoft US voice in Edge) and shows it as a caption.
+- Your camera shows next to her. Answer out loud and click "I've finished my answer".
+- Emma reacts to the answer and may ask a follow-up question, like a real interviewer.
+- At the end you get a report: overall score, answer quality for every question (with what a
+  strong answer would include), speaking skills (pronunciation, fluency, pace, tone and pitch,
+  English usage) and video presence (face in view, eye contact, smiling). Reports are saved
+  in the `ai_interview_result` table and listed under "History".
+
+Feedback is deliberately strict: answers are scored with a fixed rubric (most answers score
+4 to 7 out of 10), strengths are named only when earned, and every improvement refers to what
+the candidate actually said.
+
+### English level (CEFR)
+
+Both the AI interview and the voice interview report the candidate's spoken English level on
+the CEFR scale: A1, A2, A2+, B1, B1+, B2, B2+, C1, C2 (the "plus" levels are part of the CEFR).
+The report shows the level on a scale with the goal (B2 or B2+) marked, the level for vocabulary,
+grammar, fluency, coherence and pronunciation, real mistakes from the answers with corrections,
+tips for the candidate's weakest areas and a step-by-step plan up to B2+ (`english_level.py`).
+With the AI key, an AI examiner judges the transcripts together with the measured speech
+figures; without it, the level is estimated from vocabulary range, sentence complexity,
+linking words, grammar slips, pace, filler words and pronunciation clarity (never above C1,
+and capped for short answers). It is practice guidance, not an official certificate.
+
+Privacy: the video never leaves the browser. Face position, eye contact and smiles are measured
+on the device with Google's free MediaPipe face model; only these percentages are saved.
+
+### Free AI key (Groq)
+
+The questions and feedback are written by an AI model through the free Groq API, which also
+turns speech into text quickly. Without a key, the page still works in basic mode (built-in
+questions and rule-based feedback, speech to text on the server).
+
+1. Sign up at https://console.groq.com (free) and open "API Keys", then "Create API Key".
+   Copy the key (it starts with `gsk_`).
+2. In https://share.streamlit.io open your app's menu (three dots), "Settings", "Secrets".
+3. Paste this line, with your key, and click "Save":
+
+       GROQ_API_KEY = "gsk_your_key_here"
+
+Never put the key in a file on GitHub. Optional secrets: `GROQ_MODEL` (default
+`openai/gpt-oss-120b`) and `GROQ_SPEECH_MODEL` (default `whisper-large-v3-turbo`).
+
 ## Voice interview (online version)
 
 Open "Voice interview" in the menu, pick a question, click the microphone, answer, and
@@ -89,11 +142,15 @@ The score shows skill overlap only. It is not a prediction of selection.
 | `matching.py` | Matching, Score Calculation | Compares skills and calculates the score |
 | `suggestions.py` | Suggestion | Writes the suggestions |
 | `database.py` | Database | SQLite tables: user, resume, job_description, analysis_result, skill |
+| `ai_interview_page.py` | AI Interview | The AI interview page, its steps and the report |
+| `interviewer.py` | AI Interviewer | Plans questions, evaluates answers, follow-ups and final feedback (Groq AI, or built-in rules) |
+| `interview_room.html` | AI Interview | The video-call room: interviewer avatar and voice, camera, recording, eye contact |
+| `english_level.py` | English Level | CEFR level estimate (A1 to C2), improvement tips and the plan to reach B2/B2+ |
 | `speech_analysis.py` | Voice Interview Analysis | Speech to text, pitch, loudness, pace, fillers, pronunciation and English scores |
 | `streamlit_app.py` | Report (online version) | The same analysis as a Streamlit page, with register, login and history |
 | `templates/` | Input and output screens | HTML pages |
 | `static/` | | CSS styles and JavaScript |
-| `tests/` | Testing | 54 automatic tests |
+| `tests/` | Testing | 76 automatic tests |
 | `samples/` | | Four sample resumes (expected scores 100%, 62.5%, 25%, 0%) and a sample job description |
 | `screenshots/` | | Screenshots of every screen, for the report |
 
@@ -104,10 +161,15 @@ The score shows skill overlap only. It is not a prediction of selection.
 - `job_description` (jd_id, user_id, title, description, required_skills, created_at)
 - `analysis_result` (result_id, resume_id, jd_id, match_score, matched_skills, missing_skills, suggestions, analyzed_at)
 - `interview_result` (interview_id, user_id, question, transcript, duration, overall_score, details, analyzed_at)
+- `ai_interview_result` (ai_interview_id, user_id, role, experience_level, interview_type, overall_score, details, analyzed_at)
 - `skill` (skill_id, skill_name, category)
 
 The database is the file `resume_analyzer.db`, created automatically on the first run.
 Delete that file to start with an empty database.
+
+## Look and feel
+
+`.streamlit/config.toml` sets the app's colours and fonts (IBM Plex Sans and Source Serif 4).
 
 ## Run the tests
 

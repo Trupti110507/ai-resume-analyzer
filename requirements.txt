@@ -5,3 +5,4 @@ python-docx>=1.1
 faster-whisper>=1.1
 av>=12
 numpy>=1.26
+requests>=2.31

@@ -4,6 +4,9 @@ AI Resume Analyzer - Streamlit version (for publishing online).
 Uses the same modules as the Flask application (app.py): text extraction,
 preprocessing, skill identification, matching, suggestions and the database.
 
+The "AI interview" page runs a mock video interview for any role with Emma, an AI
+interviewer who speaks US English (see ai_interview_page.py and interviewer.py).
+
 The "Voice interview" page records a spoken interview answer from the microphone
 and reports pronunciation, fluency, pace, tone and pitch, and English usage.
 
@@ -20,7 +23,10 @@ import pandas as pd
 import streamlit as st
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import ai_interview_page
 import database
+import english_level
+import interviewer
 import speech_analysis
 from matching import calculate_score, match_skills
 from preprocessing import top_keywords
@@ -37,7 +43,40 @@ st.set_page_config(page_title="Resume Analysis Report", page_icon="📄", layout
 
 # Hide Streamlit's grey hints inside input boxes ("Press Enter to submit form").
 # Pressing Enter still works.
-st.markdown('<style>[data-testid="InputInstructions"] { display: none !important; }</style>', unsafe_allow_html=True)
+st.markdown("""<style>
+[data-testid="InputInstructions"] { display: none !important; }
+h1 { letter-spacing: -0.3px; }
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] a { color: #9ADBD4; }
+/* Interview report summary band */
+.ri-band { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; padding: 20px 22px; margin: 6px 0 14px;
+  background: #ffffff; border: 1px solid #D3DCE3; border-radius: 12px; }
+.ri-score { min-width: 150px; }
+.ri-big { font-family: "Source Serif 4", Georgia, serif; font-size: 54px; font-weight: 600; line-height: 1; color: #172338; }
+.ri-big small { font-size: 18px; color: #5B6577; margin-left: 4px; font-weight: 500; }
+.ri-verdict { margin-top: 6px; color: #0F6B66; font-weight: 600; }
+.ri-bars { flex: 1; min-width: 240px; display: grid; gap: 10px; }
+.ri-row { display: grid; grid-template-columns: 130px 1fr 92px; align-items: center; gap: 12px; font-size: 15px; }
+.ri-track { height: 8px; border-radius: 4px; background: #E8EEF1; overflow: hidden; }
+.ri-track i { display: block; height: 100%; background: #0F6B66; border-radius: 4px; }
+.ri-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ri-na { font-weight: 400; color: #5B6577; font-size: 13px; }
+/* English level (CEFR) */
+.el-wrap { background: #ffffff; border: 1px solid #D3DCE3; border-radius: 12px; padding: 18px 20px; margin: 4px 0 12px; }
+.el-head { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+.el-level { font-family: "Source Serif 4", Georgia, serif; font-size: 44px; font-weight: 600; line-height: 1;
+  color: #ffffff; background: #172338; border-radius: 10px; padding: 10px 16px; min-width: 86px; text-align: center; }
+.el-name { font-weight: 600; font-size: 17px; }
+.el-gap { color: #5B6577; font-size: 14.5px; margin-top: 2px; }
+.el-scale { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+.el-cell { text-align: center; padding: 7px 0; font-size: 13px; font-weight: 600; border-radius: 6px;
+  background: #E8EEF1; color: #5B6577; border: 2px solid transparent; }
+.el-cell.el-past { background: #CFE5E2; color: #0F6B66; }
+.el-cell.el-goal { border-color: #0F6B66; }
+.el-cell.el-now { background: #172338; color: #ffffff; }
+.el-legend { margin-top: 8px; font-size: 12.5px; color: #5B6577; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.el-key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-left: 8px; }
+.el-key-now { background: #172338; } .el-key-goal { border: 2px solid #0F6B66; }
+</style>""", unsafe_allow_html=True)
 
 
 def read_sample(name, mode="rb"):
@@ -149,6 +188,7 @@ def show_login_page():
 
 def show_history_page(user):
     st.header("History")
+    ai_interview_page.show_ai_history(user)
     interviews = database.list_interviews(user["user_id"])
     if interviews:
         st.subheader("Voice interviews")
@@ -295,6 +335,8 @@ def show_interview_report(r):
     ]))
     st.markdown("**Suggestions for improvement**")
     st.markdown("\n".join(f"{n}. {t}" for n, t in enumerate(r["suggestions"], start=1)))
+    if r.get("english") is not None:
+        ai_interview_page.show_english_level(r["english"])
     with st.expander("What you said (transcript)"):
         st.write(r["transcript"] or "No words were recognized.")
 
@@ -340,6 +382,9 @@ def show_interview_page(user):
                     else:
                         spoken_skills = find_skills(" ".join(w["word"] for w in words))
                         result = speech_analysis.analyze_speech(audio, words, spoken_skills)
+                        rule_level = english_level.estimate(result["transcript"], [result])
+                        result["english"], _ai = interviewer.assess_english(
+                            [{"answer": result["transcript"], "speech": result, "evaluation": {}}], rule_level)
                         database.save_interview(user["user_id"], question, result)
                         st.session_state["interview"] = {"question": question, "result": result}
 
@@ -365,12 +410,14 @@ else:
     with st.sidebar:
         st.write(f"Logged in as **{user['name']}**")
         st.caption(user["email"])
-        page = st.radio("Menu", ["New analysis", "Voice interview", "History"])
+        page = st.radio("Menu", ["New analysis", "AI interview", "Voice interview", "History"])
         if st.button("Log out"):
             st.session_state.clear()
             st.rerun()
     if page == "History":
         show_history_page(user)
+    elif page == "AI interview":
+        ai_interview_page.show_ai_interview_page(user, speech_model)
     elif page == "Voice interview":
         show_interview_page(user)
     else:

@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --room: #111b2a; --tile: #1a2638; --raise: #223047; --line: #2c3b54; --text: #eef2f6; --muted: #a3b1c4;
+    --teal: #12857e; --teal-strong: #0f6b66; --rec: #d64a43; --good: #5cc28f; --warn: #e9b44c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; color: var(--text);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; }
+  .room { background: var(--room); border-radius: 16px; padding: 16px 16px 14px; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .title { font-family: "Source Serif 4", Georgia, serif; font-size: 19px; font-weight: 600; letter-spacing: .1px; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .rec { display: none; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 99px; background: rgba(214,74,67,.14);
+    color: #ffb4ae; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .rec .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .progress { display: flex; gap: 4px; margin: 12px 0 14px; }
+  .progress i { flex: 1; height: 4px; border-radius: 2px; background: var(--raise); }
+  .progress i.done { background: var(--teal); }
+  .progress i.now { background: linear-gradient(90deg, var(--teal) 50%, var(--raise) 50%); }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .tiles { grid-template-columns: 1fr; } }
+  .tile { position: relative; background: var(--tile); border-radius: 12px; overflow: hidden; max-height: 52vw;
+    aspect-ratio: 4 / 3; outline: 2px solid transparent; outline-offset: -2px; transition: outline-color .25s; }
+  .tile.active { outline-color: var(--teal); }
+  .tile.listening { outline-color: var(--good); }
+  .tag { position: absolute; left: 10px; bottom: 10px; background: rgba(10,16,26,.74); padding: 5px 10px;
+    border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .tag .role { color: var(--muted); }
+  .hint { position: absolute; right: 10px; top: 10px; background: rgba(10,16,26,.74); padding: 5px 10px;
+    border-radius: 8px; font-size: 12px; display: none; }
+  .hint.ok { color: #9be3bd; } .hint.warn { color: #f3d08a; } .hint.bad { color: #ffb4ae; }
+  video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); background: #0c131f; }
+  svg.avatar { width: 100%; height: 100%; display: block; }
+  .speaking .head { animation: nod 2.4s ease-in-out infinite; transform-origin: 200px 230px; }
+  @keyframes nod { 25% { transform: rotate(1.2deg); } 75% { transform: rotate(-1deg); } }
+  .eyes { transform-origin: 200px 150px; animation: blink 4.6s infinite; }
+  @keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+  .caption { margin-top: 12px; min-height: 64px; background: var(--tile); border-radius: 12px; padding: 11px 16px; }
+  .caption small { display: block; color: var(--muted); font-size: 12.5px; margin-bottom: 3px; }
+  .caption span { font-size: 17px; line-height: 1.5; }
+  .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-top: 12px; }
+  .bar .main { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .leave-wrap { justify-self: end; }
+  @media (max-width: 760px) { .bar { grid-template-columns: 1fr; } .leave-wrap { justify-self: center; } .bar .spacer { display: none; } }
+  button { font: inherit; font-size: 14px; font-weight: 500; border-radius: 10px; padding: 10px 18px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raise); color: var(--text); transition: background .15s; }
+  button:hover:not(:disabled) { background: #2a3a55; }
+  button:focus-visible { outline: 2px solid #8fd3cf; outline-offset: 2px; }
+  button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+  button.primary:hover:not(:disabled) { background: var(--teal-strong); }
+  button.leave { background: transparent; border-color: rgba(214,74,67,.6); color: #ffb4ae; }
+  button.leave:hover:not(:disabled) { background: rgba(214,74,67,.14); }
+  button:disabled { opacity: .4; cursor: default; }
+  .status { text-align: center; font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+  .meter { width: 64px; height: 5px; border-radius: 3px; background: #2b3a52; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--good); transition: width .1s; }
+  .lobby { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+  .check { display: flex; gap: 16px; font-size: 14px; color: var(--muted); }
+  .check b { font-weight: 500; color: var(--text); }
+  .check .ok { color: var(--good); } .check .bad { color: #ffb4ae; }
+  .error { color: #ffb4ae; font-size: 14px; text-align: center; margin-top: 8px; }
+  .hidden { display: none !important; }
+  .thinking span { display: inline-block; animation: pulse 1s infinite; }
+  .thinking span:nth-child(2) { animation-delay: .2s; } .thinking span:nth-child(3) { animation-delay: .4s; }
+  @media (prefers-reduced-motion: reduce) { .speaking .head, .eyes, .rec .dot, .thinking span { animation: none; } }
+</style>
+</head>
+<body>
+<div class="room" id="room">
+  <div class="top">
+    <div>
+      <div class="title" id="title">Interview room</div>
+      <div class="sub" id="turnLabel">Check your camera and microphone, then join.</div>
+    </div>
+    <div class="rec" id="timerPill"><span class="dot"></span><span id="timer">0:00</span></div>
+  </div>
+  <div class="progress" id="progress"></div>
+
+  <div class="tiles">
+    <div class="tile" id="interviewerTile">
+      <svg class="avatar" viewBox="0 0 400 300" aria-label="Interviewer">
+        <defs>
+          <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#e3eaec"/><stop offset="1" stop-color="#c3d3d6"/>
+          </linearGradient>
+        </defs>
+        <rect width="400" height="300" fill="url(#wall)"/>
+        <rect x="18" y="26" width="92" height="120" rx="4" fill="#c6d3e1"/>
+        <rect x="26" y="34" width="76" height="104" rx="2" fill="#e8eef4"/>
+        <rect x="300" y="40" width="70" height="8" rx="3" fill="#9fb2c7"/>
+        <rect x="300" y="56" width="50" height="8" rx="3" fill="#9fb2c7"/>
+        <g class="head" id="head">
+          <path d="M95 300 C100 238 140 214 200 214 C260 214 300 238 305 300 Z" fill="#1f3a4d"/>
+          <path d="M170 216 L200 262 L230 216 Z" fill="#f4f6f8"/>
+          <path d="M160 222 L200 300 L176 300 L150 230 Z" fill="#1b2d49"/>
+          <path d="M240 222 L200 300 L224 300 L250 230 Z" fill="#1b2d49"/>
+          <rect x="184" y="182" width="32" height="40" rx="12" fill="#e0ac8a"/>
+          <path d="M132 120 C128 64 168 44 200 44 C238 44 274 66 270 124 C272 168 262 200 250 214 L150 214 C138 200 128 166 132 120 Z" fill="#4a2f22"/>
+          <ellipse cx="200" cy="134" rx="54" ry="64" fill="#efc09e"/>
+          <path d="M146 116 C150 74 188 66 206 70 C234 74 254 92 256 120 C242 98 214 88 186 94 C168 98 154 106 146 116 Z" fill="#4a2f22"/>
+          <path d="M168 120 Q178 114 188 119" stroke="#4a2f22" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M212 119 Q222 114 232 120" stroke="#4a2f22" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <g class="eyes">
+            <ellipse cx="178" cy="136" rx="6" ry="7" fill="#2b1d16"/>
+            <ellipse cx="222" cy="136" rx="6" ry="7" fill="#2b1d16"/>
+            <circle cx="180" cy="134" r="1.8" fill="#fff"/><circle cx="224" cy="134" r="1.8" fill="#fff"/>
+          </g>
+          <path d="M200 140 Q196 158 202 162" stroke="#d39a78" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="166" cy="160" rx="10" ry="6" fill="#f2a99a" opacity=".35"/>
+          <ellipse cx="234" cy="160" rx="10" ry="6" fill="#f2a99a" opacity=".35"/>
+          <path d="M184 174 Q200 182 216 174" stroke="#b5574a" stroke-width="3" fill="none" stroke-linecap="round" id="smile"/>
+          <ellipse cx="200" cy="177" rx="11" ry="0" fill="#8e3b33" id="mouth"/>
+        </g>
+      </svg>
+      <div class="tag"><span id="interviewerName">Emma</span><span class="role">Interviewer</span></div>
+    </div>
+
+    <div class="tile" id="candidateTile">
+      <video id="cam" autoplay muted playsinline></video>
+      <div class="hint" id="faceHint"></div>
+      <div class="tag">You <span class="meter" title="Microphone level"><i id="level"></i></span></div>
+    </div>
+  </div>
+
+  <div class="caption" id="caption"><small id="captionWho">Before we start</small><span id="captionText">Allow camera and microphone access, then join the interview.</span></div>
+
+  <div class="lobby" id="lobby">
+    <div class="check"><span>Camera <b id="camCheck">checking…</b></span><span>Microphone <b id="micCheck">checking…</b></span></div>
+    <button class="primary" id="joinBtn" disabled>Join interview</button>
+  </div>
+  <div class="error" id="error"></div>
+
+  <div class="bar hidden" id="controls">
+    <span class="spacer"></span>
+    <span class="main">
+      <button id="repeatBtn" disabled>Repeat question</button>
+      <button class="primary" id="finishBtn" disabled>I've finished my answer</button>
+      <button id="skipBtn" disabled>Skip question</button>
+    </span>
+    <span class="leave-wrap"><button class="leave" id="endBtn">End interview</button></span>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<script type="module">
+const MP_VERSION = "0.10.14";
+const MP_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`;
+const FACE_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const US_VOICES = ["Google US English", "Microsoft Aria Online", "Microsoft Jenny Online", "Microsoft Ava Online",
+  "Microsoft Emma Online", "Microsoft Michelle Online", "Samantha", "Microsoft Zira", "Allison", "Ava"];
+
+const $ = (id) => document.getElementById(id);
+let args = {}, joined = false, stream = null, currentTurn = null, state = "lobby";
+let recorder = null, chunks = [], recordStart = 0, timerHandle = null, mouthHandle = null;
+let confirmEnd = false;
+let landmarker = null, faceHandle = null, faceStats = null, audioCtx = null, analyser = null;
+
+// ------------------------------------------------ Streamlit messaging
+function send(type, data = {}) { window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, data), "*"); }
+let lastHeight = 0;
+function setHeight() {
+  // Measure the room itself, not the window, so the frame cannot keep growing.
+  const height = Math.ceil(document.getElementById("room").getBoundingClientRect().height) + 6;
+  if (Math.abs(height - lastHeight) > 1) { lastHeight = height; send("streamlit:setFrameHeight", { height }); }
+}
+function setValue(value) { send("streamlit:setComponentValue", { value, dataType: "json" }); }
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "streamlit:render") onRender(event.data.args || {});
+});
+new ResizeObserver(setHeight).observe(document.getElementById("room"));
+send("streamlit:componentReady", { apiVersion: 1 });
+
+// ------------------------------------------------ rendering from Python
+function renderProgress() {
+  const total = args.q_total || 0, index = args.q_index || 0, bar = $("progress");
+  bar.innerHTML = "";
+  for (let i = 1; i <= total; i++) {
+    const seg = document.createElement("i");
+    if (args.mode === "end" || i < index) seg.className = "done";
+    else if (i === index) seg.className = "now";
+    bar.appendChild(seg);
+  }
+}
+
+function onRender(newArgs) {
+  args = newArgs;
+  $("interviewerName").textContent = args.interviewer_name || "Emma";
+  if (args.role) $("title").textContent = "Interview for " + args.role;
+  if (joined || args.mode === "end") $("turnLabel").textContent = args.label || "";
+  renderProgress();
+  if (args.turn_id !== undefined && args.turn_id !== currentTurn) {
+    currentTurn = args.turn_id;
+    if (joined) startTurn();
+  }
+  setHeight();
+}
+
+// ------------------------------------------------ camera and microphone
+async function openDevices() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    $("cam").srcObject = stream;
+    $("joinBtn").disabled = false;
+    const hasCam = stream.getVideoTracks().length > 0, hasMic = stream.getAudioTracks().length > 0;
+    $("camCheck").textContent = hasCam ? "ready" : "not found"; $("camCheck").className = hasCam ? "ok" : "bad";
+    $("micCheck").textContent = hasMic ? "ready" : "not found"; $("micCheck").className = hasMic ? "ok" : "bad";
+    startLevelMeter();
+  } catch (error) {
+    $("camCheck").textContent = "blocked"; $("camCheck").className = "bad";
+    $("micCheck").textContent = "blocked"; $("micCheck").className = "bad";
+    $("error").textContent = "Camera or microphone is blocked. Click the camera icon in the address bar, allow both, and reload the page.";
+    $("joinBtn").disabled = false;
+    $("joinBtn").textContent = "Try again";
+    $("joinBtn").onclick = () => location.reload();
+  }
+  setHeight();
+}
+
+function startLevelMeter() {
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (const v of data) sum += ((v - 128) / 128) ** 2;
+      const level = Math.min(1, Math.sqrt(sum / data.length) * 6);
+      $("level").style.width = (level * 100).toFixed(0) + "%";
+      requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (e) { /* the meter is only decoration */ }
+}
+
+// ------------------------------------------------ interviewer voice (US English)
+function pickVoice() {
+  const voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+  for (const name of US_VOICES) {
+    const v = voices.find((x) => x.name.startsWith(name) && /en[-_]US/i.test(x.lang));
+    if (v) return v;
+  }
+  return voices.find((x) => /^en[-_]US$/i.test(x.lang)) || voices.find((x) => /^en[-_]US/i.test(x.lang)) || null;
+}
+
+function animateMouth(on) {
+  clearInterval(mouthHandle);
+  $("interviewerTile").classList.toggle("active", on);
+  $("head").parentNode.classList.toggle("speaking", on);
+  $("smile").style.opacity = on ? 0 : 1;
+  if (on) mouthHandle = setInterval(() => $("mouth").setAttribute("ry", (2 + Math.random() * 7).toFixed(1)), 110);
+  else $("mouth").setAttribute("ry", "0");
+}
+
+function speak(text) {
+  return new Promise((resolve) => {
+    const sentences = (text || "").match(/[^.!?]+[.!?]*/g) || [text || ""];
+    const synth = window.speechSynthesis;
+    const voice = pickVoice();
+    const fallbackMs = 1500 + (text || "").split(/\s+/).length * 420;
+    let finished = false;
+    const done = () => { if (!finished) { finished = true; animateMouth(false); resolve(); } };
+    if (!synth || !voice) {             // no US voice available: show the caption for reading time
+      animateMouth(true);
+      setTimeout(done, fallbackMs);
+      return;
+    }
+    synth.cancel();
+    animateMouth(true);
+    sentences.forEach((sentence, index) => {
+      const u = new SpeechSynthesisUtterance(sentence.trim());
+      u.voice = voice; u.lang = "en-US"; u.rate = 0.97; u.pitch = 1.0;
+      if (index === sentences.length - 1) { u.onend = done; u.onerror = done; }
+      synth.speak(u);
+    });
+    setTimeout(done, fallbackMs + 6000);   // safety net if the browser never reports the end
+  });
+}
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => pickVoice();
+
+// ------------------------------------------------ face, eye contact and smile (on this device)
+async function loadFaceModel() {
+  try {
+    const vision = await import(`${MP_BASE}/vision_bundle.mjs`);
+    const files = await vision.FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
+    const options = (delegate) => ({ baseOptions: { modelAssetPath: FACE_MODEL, delegate },
+      runningMode: "VIDEO", numFaces: 2, outputFaceBlendshapes: true });
+    try { landmarker = await vision.FaceLandmarker.createFromOptions(files, options("GPU")); }
+    catch (e) { landmarker = await vision.FaceLandmarker.createFromOptions(files, options("CPU")); }
+  } catch (error) {
+    landmarker = null;    // video presence will be reported as "not measured"
+    console.warn("Face model unavailable", error);
+  }
+}
+
+function newFaceStats() { return { samples: 0, face: 0, looking: 0, smiling: 0, multiple: 0 }; }
+
+function sampleFace() {
+  const video = $("cam");
+  if (!landmarker || video.readyState < 2) return;
+  let result;
+  try { result = landmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  faceStats.samples += 1;
+  const faces = result.faceLandmarks || [];
+  const hint = $("faceHint");
+  hint.style.display = "block";
+  if (faces.length === 0) { hint.textContent = "Face not visible"; hint.className = "hint bad"; return; }
+  faceStats.face += 1;
+  if (faces.length > 1) faceStats.multiple += 1;
+  const lm = faces[0];
+  const nose = lm[1], left = lm[234], right = lm[454], top = lm[10], chin = lm[152];
+  const yaw = (nose.x - left.x) / ((right.x - left.x) || 1e-6);
+  const pitch = (nose.y - top.y) / ((chin.y - top.y) || 1e-6);
+  const shapes = {};
+  ((result.faceBlendshapes || [])[0]?.categories || []).forEach((c) => { shapes[c.categoryName] = c.score; });
+  const eyesAway = Math.max(...["eyeLookOutLeft", "eyeLookOutRight", "eyeLookInLeft", "eyeLookInRight",
+    "eyeLookUpLeft", "eyeLookUpRight"].map((k) => shapes[k] || 0), ((shapes.eyeLookDownLeft || 0) + (shapes.eyeLookDownRight || 0)) / 2 - 0.15);
+  const looking = yaw > 0.32 && yaw < 0.68 && pitch > 0.36 && pitch < 0.74 && eyesAway < 0.55;
+  if (looking) faceStats.looking += 1;
+  if (((shapes.mouthSmileLeft || 0) + (shapes.mouthSmileRight || 0)) / 2 > 0.4) faceStats.smiling += 1;
+  hint.textContent = looking ? "Good eye contact" : "Look at the camera";
+  hint.className = looking ? "hint ok" : "hint warn";
+}
+
+function faceSummary() {
+  if (!landmarker || !faceStats || faceStats.samples < 3) return { measured: false };
+  const n = faceStats.samples;
+  return { measured: true, samples: n, face_visible: faceStats.face / n, looking: faceStats.looking / n,
+    smiling: faceStats.smiling / n, multiple_faces: faceStats.multiple / n };
+}
+
+// ------------------------------------------------ one question and answer
+function setControls(recording) {
+  $("finishBtn").disabled = !recording;
+  $("skipBtn").disabled = !recording;
+  $("repeatBtn").disabled = !recording;
+}
+
+async function startTurn() {
+  stopRecording(false);
+  const ending = args.mode === "end";
+  state = "speaking";
+  $("turnLabel").textContent = args.label || "";
+  renderProgress();
+  $("captionWho").textContent = (args.interviewer_name || "Emma") + " is speaking";
+  $("captionText").textContent = args.question || args.say || "";
+  $("status").textContent = "";
+  setControls(false);
+  $("candidateTile").classList.remove("listening");
+  await speak(args.say || "");
+  if (ending) {
+    state = "ended";
+    $("captionWho").textContent = "Interview complete";
+    $("controls").classList.add("hidden");
+    $("status").textContent = "";
+    stream && stream.getVideoTracks().forEach((t) => (t.enabled = false));
+    return;
+  }
+  startRecording();
+}
+
+function pickMime() {
+  for (const m of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return "";
+}
+
+function startRecording() {
+  state = "listening";
+  chunks = [];
+  faceStats = newFaceStats();
+  const mime = pickMime();
+  recorder = new MediaRecorder(new MediaStream(stream.getAudioTracks()), mime ? { mimeType: mime } : undefined);
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.start(1000);
+  recordStart = Date.now();
+  $("captionWho").textContent = "Your answer";
+  $("status").textContent = "Listening. Answer out loud, then click “I've finished my answer”.";
+  $("candidateTile").classList.add("listening");
+  $("timerPill").style.display = "inline-flex";
+  setControls(true);
+  const max = (args.max_seconds || 180) * 1000;
+  clearInterval(timerHandle);
+  timerHandle = setInterval(() => {
+    const ms = Date.now() - recordStart;
+    const s = Math.floor(ms / 1000);
+    $("timer").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    if (ms >= max) finishAnswer(false);
+  }, 250);
+  clearInterval(faceHandle);
+  faceHandle = setInterval(sampleFace, 300);
+}
+
+function stopRecording(keep) {
+  clearInterval(timerHandle);
+  clearInterval(faceHandle);
+  $("timerPill").style.display = "none";
+  $("faceHint").style.display = "none";
+  if (recorder && recorder.state !== "inactive") {
+    if (!keep) recorder.onstop = null;
+    recorder.stop();
+  }
+}
+
+function finishAnswer(skipped) {
+  if (state !== "listening") return;
+  state = "thinking";
+  const seconds = (Date.now() - recordStart) / 1000;
+  const turn = currentTurn;
+  const video = faceSummary();
+  setControls(false);
+  $("candidateTile").classList.remove("listening");
+  $("captionWho").textContent = (args.interviewer_name || "Emma") + " is noting your answer";
+  $("captionText").innerHTML = '<span class="thinking"><span>●</span> <span>●</span> <span>●</span></span>';
+  $("status").textContent = "One moment…";
+  if (skipped) {
+    stopRecording(false);
+    setValue({ turn_id: turn, skipped: true, seconds, video });
+    return;
+  }
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = String(reader.result).split(",")[1] || "";
+      setValue({ turn_id: turn, audio_b64: base64, mime: blob.type, seconds, video });
+    };
+    reader.readAsDataURL(blob);
+  };
+  stopRecording(true);
+}
+
+$("finishBtn").onclick = () => finishAnswer(false);
+$("endBtn").onclick = () => {
+  if (!confirmEnd) { confirmEnd = true; $("endBtn").textContent = "Click again to end"; setTimeout(() => { confirmEnd = false; $("endBtn").textContent = "End interview"; }, 4000); return; }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  stopRecording(false);
+  state = "ending";
+  setControls(false);
+  $("endBtn").disabled = true;
+  $("status").textContent = "Ending the interview…";
+  setValue({ turn_id: currentTurn, end: true });
+};
+$("skipBtn").onclick = () => finishAnswer(true);
+$("repeatBtn").onclick = async () => {
+  if (state !== "listening") return;
+  recorder.pause && recorder.state === "recording" && recorder.pause();
+  setControls(false);
+  $("captionWho").textContent = (args.interviewer_name || "Emma") + " is speaking";
+  await speak(args.question || args.say || "");
+  if (state === "listening") {
+    recorder.resume && recorder.state === "paused" && recorder.resume();
+    $("captionWho").textContent = "Your answer";
+    setControls(true);
+  }
+};
+
+$("joinBtn").onclick = async () => {
+  joined = true;
+  $("lobby").classList.add("hidden");
+  $("controls").classList.remove("hidden");
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  // Warm up the speech engine inside the click, so the browser allows the interviewer to talk.
+  if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
+  loadFaceModel();
+  if (currentTurn !== null) startTurn();
+};
+
+openDevices();
+setHeight();
+</script>
+</body>
+</html>

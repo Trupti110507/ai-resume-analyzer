@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS interview_result (
     analyzed_at     DATETIME NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS ai_interview_result (
+    ai_interview_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL REFERENCES user (user_id) ON DELETE CASCADE,
+    role             VARCHAR(150) NOT NULL,
+    experience_level VARCHAR(60),
+    interview_type   VARCHAR(60),
+    overall_score    DECIMAL(5,2) NOT NULL CHECK (overall_score BETWEEN 0 AND 100),
+    details          TEXT NOT NULL,
+    analyzed_at      DATETIME NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS skill (
     skill_id    INTEGER PRIMARY KEY AUTOINCREMENT,
     skill_name  VARCHAR(100) NOT NULL UNIQUE,
@@ -221,3 +232,31 @@ def delete_interview(interview_id, user_id):
     with connect() as db:
         return db.execute("DELETE FROM interview_result WHERE interview_id = ? AND user_id = ?",
                           (interview_id, user_id)).rowcount > 0
+
+
+# ---------------------------------------------------------- AI interviews
+
+def save_ai_interview(user_id, report):
+    """Save one complete AI mock interview (questions, answers, scores, feedback). Returns its id."""
+    config = report["config"]
+    with connect() as db:
+        cursor = db.execute(
+            """INSERT INTO ai_interview_result
+               (user_id, role, experience_level, interview_type, overall_score, details, analyzed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, config["role"], config["level"], config["type"], report["scores"]["overall"],
+             json.dumps(report), now()))
+        return cursor.lastrowid
+
+
+def list_ai_interviews(user_id):
+    with connect() as db:
+        rows = db.execute("SELECT * FROM ai_interview_result WHERE user_id = ? ORDER BY ai_interview_id DESC",
+                          (user_id,)).fetchall()
+    return [dict(row, details=json.loads(row["details"])) for row in rows]
+
+
+def delete_ai_interview(ai_interview_id, user_id):
+    with connect() as db:
+        return db.execute("DELETE FROM ai_interview_result WHERE ai_interview_id = ? AND user_id = ?",
+                          (ai_interview_id, user_id)).rowcount > 0
